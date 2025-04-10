@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # Database
+  db:
+    image: postgres:17.4
+    container_name: win-postgres
+    environment:
+      POSTGRES_DB: win_db
+      POSTGRES_USER: win_user
+      POSTGRES_PASSWORD: win_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - win-network
+
+  # Redis
+  redis:
+    image: redis:7.2
+    container_name: win-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - win-network
+
+  # Win Backend (Kotlin Spring Boot)
+  win-backend:
+    build:
+      context: ./win-backend
+      dockerfile: Dockerfile
+    container_name: win-backend
+    depends_on:
+      - db
+      - redis
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/win_db
+      SPRING_DATASOURCE_USERNAME: win_user
+      SPRING_DATASOURCE_PASSWORD: win_pass
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      OPENWEATHERMAP_API_KEY: ${OPENWEATHERMAP_API_KEY}
+    ports:
+      - "8080:8080"
+    networks:
+      - win-network
+
+  # Python Backend (FastAPI)
+  python-backend:
+    build:
+      context: ./python-backend
+      dockerfile: Dockerfile
+    container_name: python-backend
+    ports:
+      - "8765:8765"
+    networks:
+      - win-network
+    command: python main.py
+
+  # Win Frontend (Svelte)
+  win-frontend:
+    build:
+      context: ./win-frontend
+      dockerfile: Dockerfile
+    container_name: win-frontend
+    depends_on:
+      - win-backend
+      - python-backend
+    ports:
+      - "80:80"
+    networks:
+      - win-network
+
+networks:
+  win-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
